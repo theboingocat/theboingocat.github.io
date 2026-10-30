@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overtime Dispatch & SMS Management</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 0.4; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .pulse-active { animation: pulse-ring 2s infinite ease-in-out; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-600/20 text-indigo-400 rounded-lg border border-indigo-500/30">
+                    <i data-lucide="send-horizontal" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">ShiftPulse OT Dispatch</h1>
+                    <p class="text-xs text-slate-400 hidden sm:block">Fairness-Based Automated Overtime SMS Engine</p>
+                </div>
+            </div>
+            
+            <!-- Quick Stats in Header -->
+            <div class="flex items-center space-x-4">
+                <div class="hidden md:flex items-center space-x-6 text-sm bg-slate-900/60 px-4 py-1.5 rounded-full border border-slate-700/60">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span class="text-slate-400">Available Roster:</span>
+                        <span id="stat-active-workers" class="font-semibold text-white">0</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                        <span class="text-slate-400">Active Dispatches:</span>
+                        <span id="stat-active-dispatches" class="font-semibold text-white">0</span>
+                    </div>
+                </div>
+                <button id="btn-quick-seed" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 px-3 rounded-lg border border-slate-600 transition flex items-center gap-1.5" title="Reset to Sample Data">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                    <span>Reset Data</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main App Layout -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT COLUMN: Roster Management & Dispatch Setup (5 Cols) -->
+        <div class="lg:col-span-5 space-y-6">
+
+            <!-- Card 1: Shift Dispatch Configuration -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+                        <i data-lucide="calendar-plus" class="w-5 h-5 text-indigo-400"></i>
+                        New Overtime Dispatch
+                    </h2>
+                    <span class="text-xs bg-indigo-950 text-indigo-300 border border-indigo-800/60 px-2.5 py-1 rounded-full font-medium">Step 1</span>
+                </div>
+
+                <form id="dispatch-form" onsubmit="handleStartDispatch(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-2">Select Shifts & Target Days (Multi-Select)</label>
+                        
+                        <!-- Weekend 10h Section -->
+                        <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 mb-3">
+                            <span class="text-xs font-bold text-indigo-300 block mb-2">10-Hour Weekend Shifts</span>
+                            <div class="grid grid-cols-3 gap-2" id="weekend-shift-options">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Holdover 5.5h Section -->
+                        <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3">
+                            <span class="text-xs font-bold text-emerald-300 block mb-2">5.5-Hour Holdover Shifts (Any Day)</span>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="holdover-shift-options">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Target Shift Start Date (Week Of)</label>
+                        <input type="date" id="shift-date" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+
+                    <!-- Adjustable Auto-Advance Timer -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-medium text-slate-300">Auto-Advance Timeout (No Response)</label>
+                            <span class="text-[11px] text-amber-400 font-semibold" id="timer-val-display">5 min</span>
+                        </div>
+                        <div class="flex items-center space-x-3 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5">
+                            <i data-lucide="timer" class="w-4 h-4 text-amber-400 shrink-0"></i>
+                            <input type="range" id="timeout-seconds" min="1" max="60" value="5" step="1" class="w-full accent-indigo-500 cursor-pointer" oninput="document.getElementById('timer-val-display').textContent = this.value + ' min'">
+                        </div>
+                    </div>
+
+                    <!-- Custom Follow-up Message for YES Replies -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Confirmation Follow-Up SMS (Sent on "YES")</label>
+                        <textarea id="followup-msg" rows="2" placeholder="e.g. Thanks! Please report to Gate 4 at 07:00 AM. Ask for Team Lead Sarah." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none">You are confirmed! Please report to your supervisor on duty at the start of your shift.</textarea>
+                    </div>
+
+                    <div class="bg-indigo-950/40 border border-indigo-900/60 rounded-xl p-3 text-xs text-indigo-200/90 flex gap-2">
+                        <i data-lucide="info" class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5"></i>
+                        <span>Dispatches will automatically text eligible workers in order of <strong>lowest OT hours worked</strong> until all selected shift slots are filled.</span>
+                    </div>
+
+                    <button type="submit" id="btn-launch-dispatch" class="w-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2">
+                        <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                        <span>Initiate Multi-Shift Campaign</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Card 2: Worker Roster (Sorted by Lowest OT Hours) -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 shadow-xl flex flex-col h-[520px]">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h2 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+                            <i data-lucide="users" class="w-5 h-5 text-emerald-400"></i>
+                            Fairness Roster Queue
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Sorted: Least to Most OT Hours Worked</p>
+                    </div>
+                    <button onclick="toggleWorkerModal(true)" class="bg-slate-700 hover:bg-slate-600 text-xs text-slate-200 px-3 py-1.5 rounded-lg border border-slate-600 transition flex items-center gap-1">
+                        <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                        <span>Add Worker</span>
+                    </button>
+                </div>
+
+                <!-- Roster List -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2.5" id="roster-container">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Active Dispatch Simulator & Dashboard Logs (7 Cols) -->
+        <div class="lg:col-span-7 space-y-6">
+
+            <!-- Card 3: Live Dispatch Simulator Engine -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="relative flex h-3 w-3">
+                            <span id="simulator-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75"></span>
+                            <span id="simulator-dot" class="relative inline-flex rounded-full h-3 w-3 bg-slate-500"></span>
+                        </span>
+                        <h2 class="text-base font-semibold text-slate-100">Live SMS Dispatch Center</h2>
+                    </div>
+                    <div id="dispatch-status-badge" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-medium">
+                        Idle
+                    </div>
+                </div>
+
+                <!-- Campaign Progress Overview (Hidden when idle) -->
+                <div id="campaign-progress-bar" class="hidden mb-5 bg-slate-900 border border-slate-700/80 rounded-xl p-4">
+                    <div class="flex justify-between text-xs font-medium text-slate-300 mb-2">
+                        <span id="campaign-title">Weekend Shift (10h) - Sat, Oct 31</span>
+                        <span id="campaign-count-text" class="text-indigo-400">0 of 2 Slots Filled</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                        <div id="campaign-progress-fill" class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full w-0 transition-all duration-500"></div>
+                    </div>
+                    <div class="flex justify-between items-center mt-3 text-xs text-slate-400">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-slate-500">Current Queue Position:</span>
+                            <span id="current-queue-index" class="font-bold text-slate-200">#1</span>
+                        </div>
+                        <button onclick="abortDispatch()" class="text-rose-400 hover:text-rose-300 text-xs font-medium underline">Stop Campaign</button>
+                    </div>
+                </div>
+
+                <!-- Active Contact / SMS Simulation Box -->
+                <div id="simulator-body" class="bg-slate-900 rounded-xl border border-slate-700/80 p-4 min-h-[260px] flex flex-col justify-between">
+                    <!-- Default Idle State -->
+                    <div id="sim-idle-state" class="flex flex-col items-center justify-center py-12 text-center text-slate-500 space-y-2">
+                        <div class="p-3 bg-slate-800/80 rounded-full border border-slate-700">
+                            <i data-lucide="message-square" class="w-8 h-8 text-slate-400"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-400">No active dispatch campaign running.</p>
+                        <p class="text-xs max-w-sm">Configure your shift parameters on the left and click "Initiate Sequential SMS Campaign" to begin contacting workers.</p>
+                    </div>
+
+                    <!-- Active Contact State (Hidden when idle) -->
+                    <div id="sim-active-state" class="hidden space-y-4">
+                        <!-- Worker Header -->
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-full bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300 font-bold text-sm" id="sim-worker-avatar">
+                                    JD
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-white" id="sim-worker-name">John Doe</h3>
+                                    <p class="text-xs text-slate-400" id="sim-worker-phone">+1 (555) 019-2834</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div id="auto-timer-badge" class="inline-flex items-center gap-1 text-xs bg-amber-950/80 border border-amber-600/50 text-amber-300 px-2 py-0.5 rounded-full font-mono font-bold mb-0.5">
+                                    <i data-lucide="clock" class="w-3 h-3 text-amber-400 animate-spin"></i>
+                                    <span id="countdown-text">30s</span>
+                                </div>
+                                <span class="text-[10px] text-slate-400 block">Accumulated OT: <span class="font-semibold text-emerald-400" id="sim-worker-hours">12.0 hrs</span></span>
+                            </div>
+                        </div>
+
+                        <!-- Chat Bubbles Simulation -->
+                        <div class="space-y-3 my-2 max-h-[160px] overflow-y-auto pr-1 text-xs">
+                            <!-- Outbound System SMS -->
+                            <div class="flex justify-end">
+                                <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-3.5 py-2.5 max-w-[85%] shadow-md">
+                                    <p class="font-medium text-[10px] text-indigo-200 mb-0.5">OUTBOUND SYSTEM SMS</p>
+                                    <p id="sim-outbound-msg" class="text-xs leading-relaxed">Loading message text...</p>
+                                    <span id="sim-outbound-time" class="text-[10px] text-indigo-200/80 mt-1 block text-right">Just now</span>
+                                </div>
+                            </div>
+
+                            <!-- Inbound Worker Reply Placeholder / Dynamic -->
+                            <div id="sim-inbound-container" class="flex justify-start hidden">
+                                <div class="bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl rounded-tl-none px-3.5 py-2.5 max-w-[85%] shadow-md">
+                                    <p class="font-medium text-[10px] text-slate-400 mb-0.5" id="sim-inbound-sender">WORKER REPLY</p>
+                                    <p id="sim-inbound-msg" class="text-xs font-semibold">YES</p>
+                                </div>
+                            </div>
+
+                            <!-- Automated Follow-up SMS for YES -->
+                            <div id="sim-followup-container" class="flex justify-end hidden">
+                                <div class="bg-emerald-600 text-white rounded-2xl rounded-tr-none px-3.5 py-2.5 max-w-[85%] shadow-md border border-emerald-400/30">
+                                    <p class="font-medium text-[10px] text-emerald-200 mb-0.5">AUTOMATED FOLLOW-UP SMS</p>
+                                    <p id="sim-followup-msg" class="text-xs leading-relaxed">Loading follow-up text...</p>
+                                    <span id="sim-followup-time" class="text-[10px] text-emerald-200/80 mt-1 block text-right">Just now</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mock Interactive Controls -->
+                        <div class="pt-3 border-t border-slate-800">
+                            <p class="text-[11px] font-medium text-slate-400 mb-2 uppercase tracking-wider text-center">Simulate Worker SMS Response</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="simulateResponse('YES')" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 py-2 px-3 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5">
+                                    <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                    <span>Reply YES</span>
+                                </button>
+                                <button onclick="simulateResponse('NO')" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 py-2 px-3 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5">
+                                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                                    <span>Reply NO</span>
+                                </button>
+                                <button onclick="simulateResponse('TIMEOUT')" class="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 py-2 px-3 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5">
+                                    <i data-lucide="clock" class="w-4 h-4"></i>
+                                    <span>No Reply (Timeout)</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs Section: Message Logs & Shift Assignments -->
+            <div class="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 shadow-xl">
+                <!-- Tab Controls -->
+                <div class="flex border-b border-slate-700 pb-3 justify-between items-center">
+                    <div class="flex space-x-2">
+                        <button id="tab-btn-logs" onclick="switchTab('logs')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition">
+                            SMS Audit Logs
+                        </button>
+                        <button id="tab-btn-shifts" onclick="switchTab('shifts')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 transition">
+                            Shift Assignments Log
+                        </button>
+                    </div>
+                    <button onclick="clearAuditLogs()" class="text-xs text-slate-400 hover:text-slate-200 transition">Clear History</button>
+                </div>
+
+                <!-- Tab Content 1: SMS Audit Logs -->
+                <div id="tab-content-logs" class="mt-4">
+                    <div class="max-h-[220px] overflow-y-auto custom-scrollbar space-y-2 pr-1" id="audit-log-container">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Tab Content 2: Shift Assignments Log -->
+                <div id="tab-content-shifts" class="mt-4 hidden">
+                    <div class="max-h-[220px] overflow-y-auto custom-scrollbar space-y-2 pr-1" id="shift-log-container">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- MODAL: Add / Edit Worker -->
+    <div id="worker-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white" id="modal-title">Add New Worker</h3>
+                <button onclick="toggleWorkerModal(false)" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form id="worker-form" onsubmit="handleSaveWorker(event)" class="space-y-4">
+                <input type="hidden" id="worker-id">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
+                    <input type="text" id="worker-name" required placeholder="e.g. Sarah Connor" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Phone Number (SMS Target)</label>
+                    <input type="tel" id="worker-phone" required placeholder="e.g. +1 (555) 234-5678" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Previous OT Hours Worked</label>
+                    <input type="number" step="0.5" id="worker-hours" min="0" value="0" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Status</label>
+                    <select id="worker-status" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="active">Active (Eligible for OT)</option>
+                        <option value="inactive">Inactive / On Leave</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-3 pt-3">
+                    <button type="button" onclick="toggleWorkerModal(false)" class="px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 rounded-xl transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg transition">Save Worker</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- App JavaScript Engine -->
+    <script>
+        // --- INITIAL DATA SEED ---
+        const INITIAL_WORKERS = [
+            { id: 'w1', name: 'Alex Rivera', phone: '+1 (555) 102-3948', otHours: 4.0, status: 'active' },
+            { id: 'w2', name: 'Jordan Miller', phone: '+1 (555) 293-8401', otHours: 8.5, status: 'active' },
+            { id: 'w3', name: 'Casey Zhang', phone: '+1 (555) 384-9202', otHours: 12.0, status: 'active' },
+            { id: 'w4', name: 'Morgan Vance', phone: '+1 (555) 472-1039', otHours: 16.5, status: 'active' },
+            { id: 'w5', name: 'Taylor Brooks', phone: '+1 (555) 581-9230', otHours: 21.0, status: 'active' },
+            { id: 'w6', name: 'Riley Smith', phone: '+1 (555) 692-3810', otHours: 25.5, status: 'inactive' }
+        ];
+
+        // --- APP STATE ---
+        let workers = [];
+        let auditLogs = [];
+        let assignedShifts = [];
+        let responseTimer = null;
+        let countdownValue = 0;
+        
+        let activeCampaign = {
+            isRunning: false,
+            selectedShifts: [], // Array of { id, type, day, hours, slotsNeeded, slotsFilled }
+            followupMsg: '',
+            timeoutSecs: 30,
+            totalSlotsNeeded: 0,
+            totalSlotsFilled: 0,
+            queue: [], // Sorted list of eligible workers
+            currentIndex: 0,
+            assignedWorkers: []
+        };
+
+        // --- LIFECYCLE & INITIALIZATION ---
+        window.onload = function() {
+            lucide.createIcons();
+            loadInitialData();
+            setupDateDefaults();
+            renderShiftOptions();
+            renderRoster();
+            renderAuditLogs();
+            renderShiftLogs();
+            updateStatsHeader();
+            
+            document.getElementById('btn-quick-seed').addEventListener('click', () => {
+                if (confirm('Reset roster and history to initial default demo data?')) {
+                    localStorage.clear();
+                    loadInitialData();
+                    renderRoster();
+                    renderAuditLogs();
+                    renderShiftLogs();
+                    updateStatsHeader();
+                    showToast('Data reset to default successfully.', 'info');
+                }
+            });
+        };
+
+        function loadInitialData() {
+            const storedWorkers = localStorage.getItem('ot_workers');
+            workers = storedWorkers ? JSON.parse(storedWorkers) : [...INITIAL_WORKERS];
+            
+            const storedLogs = localStorage.getItem('ot_audit_logs');
+            auditLogs = storedLogs ? JSON.parse(storedLogs) : [];
+
+            const storedShifts = localStorage.getItem('ot_shifts');
+            assignedShifts = storedShifts ? JSON.parse(storedShifts) : [];
+        }
+
+        function saveData() {
+            localStorage.setItem('ot_workers', JSON.stringify(workers));
+            localStorage.setItem('ot_audit_logs', JSON.stringify(auditLogs));
+            localStorage.setItem('ot_shifts', JSON.stringify(assignedShifts));
+            updateStatsHeader();
+        }
+
+        function setupDateDefaults() {
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('shift-date').value = tomorrow.toISOString().split('T')[0];
+        }
+
+        // --- UI HANDLERS: MULTI-SHIFT SELECTOR ---
+        function renderShiftOptions() {
+            const weekendContainer = document.getElementById('weekend-shift-options');
+            const holdoverContainer = document.getElementById('holdover-shift-options');
+
+            weekendContainer.innerHTML = '';
+            holdoverContainer.innerHTML = '';
+
+            const weekendDays = ['Friday', 'Saturday', 'Sunday'];
+            const allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+            weekendDays.forEach(day => {
+                const id = `shift_10_${day.toLowerCase()}`;
+                const card = document.createElement('div');
+                card.className = 'bg-slate-800 border border-slate-700/70 p-2 rounded-lg text-xs space-y-1.5';
+                card.innerHTML = `
+                    <label class="flex items-center gap-1.5 cursor-pointer font-medium text-slate-200">
+                        <input type="checkbox" id="${id}_chk" class="rounded text-indigo-600 focus:ring-indigo-500 bg-slate-900 border-slate-700" onchange="toggleShiftSlotInput('${id}')">
+                        <span>${day}</span>
+                    </label>
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 pl-5">
+                        <span>Needed:</span>
+                        <input type="number" id="${id}_slots" value="1" min="1" max="10" disabled class="w-12 bg-slate-900 border border-slate-700 rounded text-center text-white text-xs py-0.5 disabled:opacity-40">
+                    </div>
+                `;
+                weekendContainer.appendChild(card);
+            });
+
+            allDays.forEach(day => {
+                const id = `shift_55_${day.toLowerCase()}`;
+                const card = document.createElement('div');
+                card.className = 'bg-slate-800 border border-slate-700/70 p-2 rounded-lg text-xs space-y-1.5';
+                card.innerHTML = `
+                    <label class="flex items-center gap-1.5 cursor-pointer font-medium text-slate-200">
+                        <input type="checkbox" id="${id}_chk" class="rounded text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700" onchange="toggleShiftSlotInput('${id}')">
+                        <span>${day}</span>
+                    </label>
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 pl-5">
+                        <span>Needed:</span>
+                        <input type="number" id="${id}_slots" value="1" min="1" max="10" disabled class="w-12 bg-slate-900 border border-slate-700 rounded text-center text-white text-xs py-0.5 disabled:opacity-40">
+                    </div>
+                `;
+                holdoverContainer.appendChild(card);
+            });
+        }
+
+        function toggleShiftSlotInput(id) {
+            const chk = document.getElementById(`${id}_chk`);
+            const input = document.getElementById(`${id}_slots`);
+            input.disabled = !chk.checked;
+        }
+
+        // --- WORKER ROSTER OPERATIONS ---
+        function getSortedWorkers() {
+            return [...workers].sort((a, b) => a.otHours - b.otHours);
+        }
+
+        function renderRoster() {
+            const container = document.getElementById('roster-container');
+            container.innerHTML = '';
+
+            const sorted = getSortedWorkers();
+
+            if (sorted.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">No workers in roster. Click "Add Worker" to populate.</div>`;
+                return;
+            }
+
+            sorted.forEach((worker, index) => {
+                const isTargetedInCampaign = activeCampaign.isRunning &&
+                    activeCampaign.queue[activeCampaign.currentIndex]?.id === worker.id;
+
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-xl border transition-all flex items-center justify-between ${
+                    isTargetedInCampaign
+                        ? 'bg-indigo-950/60 border-indigo-500 shadow-lg scale-[1.01]'
+                        : worker.status === 'active'
+                            ? 'bg-slate-900/90 border-slate-700/80 hover:border-slate-600'
+                            : 'bg-slate-900/40 border-slate-800 opacity-60'
+                }`;
+
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                            isTargetedInCampaign
+                                ? 'bg-indigo-600 text-white animate-pulse'
+                                : 'bg-slate-800 text-slate-300 border border-slate-700'
+                        }">
+                            #${index + 1}
+                        </div>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <h3 class="text-xs font-bold text-slate-200">${worker.name}</h3>
+                                ${isTargetedInCampaign ? '<span class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-1.5 py-0.5 rounded font-semibold">Messaging...</span>' : ''}
+                                ${worker.status === 'inactive' ? '<span class="text-[10px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">Inactive</span>' : ''}
+                            </div>
+                            <p class="text-[11px] text-slate-400">${worker.phone}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <div class="text-right">
+                            <span class="text-xs font-semibold text-emerald-400 block">${worker.otHours.toFixed(1)} hrs</span>
+                            <span class="text-[10px] text-slate-500">Prior OT</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <button onclick="toggleWorkerStatus('${worker.id}')" class="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition" title="Toggle Status">
+                                <i data-lucide="${worker.status === 'active' ? 'user-x' : 'user-check'}" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button onclick="openEditWorker('${worker.id}')" class="p-1.5 text-slate-400 hover:text-indigo-300 hover:bg-slate-800 rounded-lg transition" title="Edit Worker">
+                                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+            lucide.createIcons();
+        }
+
+        function toggleWorkerStatus(id) {
+            const worker = workers.find(w => w.id === id);
+            if (worker) {
+                worker.status = worker.status === 'active' ? 'inactive' : 'active';
+                saveData();
+                renderRoster();
+                showToast(`${worker.name} status set to ${worker.status}.`, 'info');
+            }
+        }
+
+        function toggleWorkerModal(show) {
+            const modal = document.getElementById('worker-modal');
+            if (show) {
+                document.getElementById('worker-form').reset();
+                document.getElementById('worker-id').value = '';
+                document.getElementById('modal-title').textContent = 'Add New Worker';
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function openEditWorker(id) {
+            const worker = workers.find(w => w.id === id);
+            if (!worker) return;
+            document.getElementById('worker-id').value = worker.id;
+            document.getElementById('worker-name').value = worker.name;
+            document.getElementById('worker-phone').value = worker.phone;
+            document.getElementById('worker-hours').value = worker.otHours;
+            document.getElementById('worker-status').value = worker.status;
+            document.getElementById('modal-title').textContent = 'Edit Worker Details';
+            document.getElementById('worker-modal').classList.remove('hidden');
+        }
+
+        function handleSaveWorker(e) {
+            e.preventDefault();
+            const id = document.getElementById('worker-id').value;
+            const name = document.getElementById('worker-name').value;
+            const phone = document.getElementById('worker-phone').value;
+            const otHours = parseFloat(document.getElementById('worker-hours').value) || 0;
+            const status = document.getElementById('worker-status').value;
+
+            if (id) {
+                const index = workers.findIndex(w => w.id === id);
+                if (index !== -1) {
+                    workers[index] = { id, name, phone, otHours, status };
+                }
+            } else {
+                workers.push({
+                    id: 'w_' + Date.now(),
+                    name,
+                    phone,
+                    otHours,
+                    status
+                });
+            }
+
+            saveData();
+            renderRoster();
+            toggleWorkerModal(false);
+            showToast('Worker profile saved successfully.', 'success');
+        }
+
+        // --- SEQUENTIAL DISPATCH LOGIC ENGINE (MULTI-SHIFT SUPPORT) ---
+        function getUnfilledShifts() {
+            if (!activeCampaign || !activeCampaign.selectedShifts) return [];
+            return activeCampaign.selectedShifts.filter(s => s.slotsFilled < s.slotsNeeded);
+        }
+
+        function updateCampaignProgressUI() {
+            if (!activeCampaign.isRunning) return;
+
+            const totalNeeded = activeCampaign.totalSlotsNeeded;
+            const totalFilled = activeCampaign.totalSlotsFilled;
+            const pct = totalNeeded > 0 ? Math.round((totalFilled / totalNeeded) * 100) : 0;
+
+            document.getElementById('campaign-progress-fill').style.width = `${pct}%`;
+            document.getElementById('campaign-count-text').textContent = `${totalFilled} of ${totalNeeded} Slots Filled`;
+            document.getElementById('current-queue-index').textContent = `#${activeCampaign.currentIndex + 1} of ${activeCampaign.queue.length}`;
+
+            const openShifts = getUnfilledShifts();
+            const shiftSummary = openShifts.map(s => `${s.day} (${s.type})`).join(', ');
+            document.getElementById('campaign-title').textContent = shiftSummary ? `Active Shifts: ${shiftSummary}` : 'All Shifts Filled';
+        }
+
+        function handleStartDispatch(e) {
+            e.preventDefault();
+
+            if (activeCampaign.isRunning) {
+                showToast('A campaign is already currently running. Complete or stop it first.', 'warning');
+                return;
+            }
+
+            const shiftDate = document.getElementById('shift-date').value;
+            const followupMsg = document.getElementById('followup-msg').value.trim() || 'You are confirmed! Please report to your supervisor on duty.';
+            const selectedShifts = [];
+
+            // Gather selected 10h Weekend shifts
+            ['Friday', 'Saturday', 'Sunday'].forEach(day => {
+                const id = `shift_10_${day.toLowerCase()}`;
+                const chk = document.getElementById(`${id}_chk`);
+                if (chk && chk.checked) {
+                    const slots = parseInt(document.getElementById(`${id}_slots`).value, 10) || 1;
+                    selectedShifts.push({
+                        id,
+                        type: '10h Weekend Shift',
+                        day,
+                        hours: 10,
+                        slotsNeeded: slots,
+                        slotsFilled: 0
+                    });
+                }
+            });
+
+            // Gather selected 5.5h Holdover shifts
+            ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].forEach(day => {
+                const id = `shift_55_${day.toLowerCase()}`;
+                const chk = document.getElementById(`${id}_chk`);
+                if (chk && chk.checked) {
+                    const slots = parseInt(document.getElementById(`${id}_slots`).value, 10) || 1;
+                    selectedShifts.push({
+                        id,
+                        type: '5.5h Holdover Shift',
+                        day,
+                        hours: 5.5,
+                        slotsNeeded: slots,
+                        slotsFilled: 0
+                    });
+                }
+            });
+
+            if (selectedShifts.length === 0) {
+                showToast('Please select at least one day and shift type to dispatch.', 'warning');
+                return;
+            }
+
+            const timeoutMins = parseInt(document.getElementById('timeout-seconds').value, 10) || 5;
+            const timeoutSecs = timeoutMins * 60;
+
+            // Get eligible active workers queue sorted by OT hours
+            const eligibleQueue = getSortedWorkers().filter(w => w.status === 'active');
+
+            if (eligibleQueue.length === 0) {
+                showToast('No active workers available in roster to text.', 'warning');
+                return;
+            }
+
+            const totalSlotsNeeded = selectedShifts.reduce((sum, s) => sum + s.slotsNeeded, 0);
+
+            // Initialize Campaign State
+            activeCampaign = {
+                isRunning: true,
+                selectedShifts,
+                shiftDate,
+                followupMsg,
+                timeoutMins,
+                timeoutSecs,
+                totalSlotsNeeded,
+                totalSlotsFilled: 0,
+                queue: eligibleQueue,
+                currentIndex: 0,
+                assignedWorkers: []
+            };
+
+            // UI Adjustments for Campaign Start
+            document.getElementById('sim-idle-state').classList.add('hidden');
+            document.getElementById('sim-active-state').classList.remove('hidden');
+            document.getElementById('campaign-progress-bar').classList.remove('hidden');
+            
+            document.getElementById('simulator-ping').className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+            document.getElementById('simulator-dot').className = 'relative inline-flex rounded-full h-3 w-3 bg-emerald-500';
+            document.getElementById('dispatch-status-badge').className = 'text-xs bg-emerald-950 text-emerald-300 border border-emerald-800/80 px-2.5 py-1 rounded-full font-medium animate-pulse';
+            document.getElementById('dispatch-status-badge').textContent = 'Campaign Active';
+
+            updateCampaignProgressUI();
+            dispatchTextToCurrentWorker();
+            renderRoster();
+            showToast(`Multi-shift campaign initiated (${selectedShifts.length} shift option(s) active). Auto-timeout: ${timeoutMins} min.`, 'success');
+        }
+
+        function clearCountdownTimer() {
+            if (responseTimer) {
+                clearInterval(responseTimer);
+                responseTimer = null;
+            }
+        }
+
+        function formatTimerDisplay(totalSeconds) {
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            return m > 0 ? `${m}m ${s < 10 ? '0' : ''}${s}s` : `${s}s`;
+        }
+
+        function startCountdownTimer() {
+            clearCountdownTimer();
+            countdownValue = activeCampaign.timeoutSecs;
+            document.getElementById('countdown-text').textContent = formatTimerDisplay(countdownValue);
+
+            responseTimer = setInterval(() => {
+                countdownValue--;
+                document.getElementById('countdown-text').textContent = formatTimerDisplay(countdownValue);
+
+                if (countdownValue <= 0) {
+                    clearCountdownTimer();
+                    simulateResponse('TIMEOUT');
+                }
+            }, 1000);
+        }
+
+        function dispatchTextToCurrentWorker() {
+            const { queue, currentIndex, shiftDate } = activeCampaign;
+            const openShifts = getUnfilledShifts();
+
+            if (openShifts.length === 0) {
+                showToast('All selected shift slots have been filled!', 'success');
+                finishCampaign();
+                return;
+            }
+
+            if (currentIndex >= queue.length) {
+                addAuditLog('SYSTEM', 'ROSTER EXHAUSTED', `Campaign stopped. All active workers queried. ${activeCampaign.totalSlotsNeeded - activeCampaign.totalSlotsFilled} slot(s) remain unfilled.`, 'warning');
+                showToast('Queue exhausted before all shift slots were filled.', 'warning');
+                finishCampaign();
+                return;
+            }
+
+            const currentWorker = queue[currentIndex];
+
+            // Render current worker in simulator
+            document.getElementById('sim-worker-avatar').textContent = currentWorker.name.split(' ').map(n => n[0]).join('');
+            document.getElementById('sim-worker-name').textContent = currentWorker.name;
+            document.getElementById('sim-worker-phone').textContent = currentWorker.phone;
+            document.getElementById('sim-worker-hours').textContent = `${currentWorker.otHours.toFixed(1)} hrs`;
+
+            // Format multi-shift message
+            const shiftListStr = openShifts.map(s => `${s.day} (${s.type})`).join(', ');
+            const msgText = `ShiftPulse OT Alert: Open overtime shifts available (Week of ${shiftDate}): [${shiftListStr}]. Reply YES with your preferred day(s) or NO within ${activeCampaign.timeoutMins} min.`;
+
+            document.getElementById('sim-outbound-msg').textContent = msgText;
+            document.getElementById('sim-outbound-time').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            // Reset Inbound and Follow-up Bubbles
+            document.getElementById('sim-inbound-container').classList.add('hidden');
+            document.getElementById('sim-followup-container').classList.add('hidden');
+
+            addAuditLog(currentWorker.name, 'SMS SENT', `Outbound SMS sent to ${currentWorker.phone}: "${msgText}"`, 'info');
+            renderRoster();
+            updateCampaignProgressUI();
+            startCountdownTimer();
+        }
+
+        function simulateResponse(replyType) {
+            if (!activeCampaign.isRunning) return;
+
+            clearCountdownTimer();
+
+            const currentWorker = activeCampaign.queue[activeCampaign.currentIndex];
+            if (!currentWorker) {
+                finishCampaign();
+                return;
+            }
+
+            const inboundContainer = document.getElementById('sim-inbound-container');
+            const inboundMsg = document.getElementById('sim-inbound-msg');
+            const inboundSender = document.getElementById('sim-inbound-sender');
+
+            inboundContainer.classList.remove('hidden');
+            inboundSender.textContent = `${currentWorker.name.toUpperCase()} (INBOUND)`;
+
+            const openShifts = getUnfilledShifts();
+
+            if (replyType === 'YES') {
+                if (openShifts.length === 0) {
+                    showToast('All shift slots have already been filled.', 'info');
+                    finishCampaign();
+                    return;
+                }
+
+                // Assign first available open shift to worker for simulation
+                const targetShift = openShifts[0];
+                targetShift.slotsFilled++;
+                activeCampaign.totalSlotsFilled++;
+                activeCampaign.assignedWorkers.push(currentWorker);
+
+                inboundMsg.textContent = `YES - I can work ${targetShift.day} (${targetShift.hours}h)`;
+                inboundMsg.className = 'text-xs font-bold text-emerald-400';
+
+                // Display follow-up SMS bubble
+                const followupContainer = document.getElementById('sim-followup-container');
+                const followupMsgEl = document.getElementById('sim-followup-msg');
+                const followupTimeEl = document.getElementById('sim-followup-time');
+                
+                followupMsgEl.textContent = activeCampaign.followupMsg;
+                followupTimeEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                followupContainer.classList.remove('hidden');
+
+                // Update worker's overtime hours automatically
+                const workerObj = workers.find(w => w.id === currentWorker.id);
+                if (workerObj) {
+                    workerObj.otHours += targetShift.hours;
+                }
+
+                // Log Shift
+                assignedShifts.unshift({
+                    id: 'shift_' + Date.now(),
+                    workerName: currentWorker.name,
+                    workerPhone: currentWorker.phone,
+                    shiftType: targetShift.type,
+                    hours: targetShift.hours,
+                    date: `${targetShift.day}, ${activeCampaign.shiftDate}`,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+
+                addAuditLog(currentWorker.name, 'REPLIED YES', `Worker accepted ${targetShift.day} (${targetShift.type}). +${targetShift.hours} hrs added. Follow-up SMS sent: "${activeCampaign.followupMsg}"`, 'success');
+                saveData();
+                renderShiftLogs();
+
+                // Check if all slots filled
+                if (activeCampaign.totalSlotsFilled >= activeCampaign.totalSlotsNeeded) {
+                    updateCampaignProgressUI();
+                    setTimeout(() => {
+                        showToast(`All ${activeCampaign.totalSlotsNeeded} multi-shift slot(s) filled successfully!`, 'success');
+                        finishCampaign();
+                    }, 1200);
+                    return;
+                } else {
+                    activeCampaign.currentIndex++;
+                    setTimeout(() => {
+                        dispatchTextToCurrentWorker();
+                    }, 1600);
+                }
+
+            } else if (replyType === 'NO') {
+                inboundMsg.textContent = 'NO';
+                inboundMsg.className = 'text-xs font-bold text-rose-400';
+
+                addAuditLog(currentWorker.name, 'REPLIED NO', `Worker declined open shift options. Advancing queue.`, 'error');
+
+                activeCampaign.currentIndex++;
+                setTimeout(() => {
+                    dispatchTextToCurrentWorker();
+                }, 1200);
+
+            } else if (replyType === 'TIMEOUT') {
+                inboundMsg.textContent = `[NO RESPONSE / TIMED OUT AFTER ${activeCampaign.timeoutMins} MIN]`;
+                inboundMsg.className = 'text-xs font-bold text-amber-400 italic';
+
+                addAuditLog(currentWorker.name, 'TIMEOUT', `No response within ${activeCampaign.timeoutMins} min timeout window. Automatically advancing queue.`, 'warning');
+
+                activeCampaign.currentIndex++;
+                setTimeout(() => {
+                    dispatchTextToCurrentWorker();
+                }, 1200);
+            }
+        }
+
+        function abortDispatch() {
+            if (confirm('Are you sure you want to cancel the current SMS dispatch campaign?')) {
+                clearCountdownTimer();
+                addAuditLog('SYSTEM', 'CAMPAIGN ABORTED', 'Dispatch campaign manually cancelled by operator.', 'warning');
+                finishCampaign();
+                showToast('Campaign aborted.', 'info');
+            }
+        }
+
+        function finishCampaign() {
+            clearCountdownTimer();
+            activeCampaign.isRunning = false;
+
+            // Reset UI
+            document.getElementById('sim-idle-state').classList.remove('hidden');
+            document.getElementById('sim-active-state').classList.add('hidden');
+            document.getElementById('campaign-progress-bar').classList.add('hidden');
+
+            document.getElementById('simulator-ping').className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75';
+            document.getElementById('simulator-dot').className = 'relative inline-flex rounded-full h-3 w-3 bg-slate-500';
+            document.getElementById('dispatch-status-badge').className = 'text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-medium';
+            document.getElementById('dispatch-status-badge').textContent = 'Idle';
+
+            renderRoster();
+            updateStatsHeader();
+        }
+
+        // --- DASHBOARD, LOGS & TABS ---
+        function switchTab(tab) {
+            const logsBtn = document.getElementById('tab-btn-logs');
+            const shiftsBtn = document.getElementById('tab-btn-shifts');
+            const logsContent = document.getElementById('tab-content-logs');
+            const shiftsContent = document.getElementById('tab-content-shifts');
+
+            if (tab === 'logs') {
+                logsBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition';
+                shiftsBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 transition';
+                logsContent.classList.remove('hidden');
+                shiftsContent.classList.add('hidden');
+            } else {
+                shiftsBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition';
+                logsBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-700/60 text-slate-300 hover:bg-slate-700 transition';
+                shiftsContent.classList.remove('hidden');
+                logsContent.classList.add('hidden');
+            }
+        }
+
+        function addAuditLog(workerName, action, details, type = 'info') {
+            const entry = {
+                id: 'log_' + Date.now(),
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                workerName,
+                action,
+                details,
+                type
+            };
+            auditLogs.unshift(entry);
+            saveData();
+            renderAuditLogs();
+        }
+
+        function renderAuditLogs() {
+            const container = document.getElementById('audit-log-container');
+            container.innerHTML = '';
+
+            if (auditLogs.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">No SMS dispatch logs recorded yet.</div>`;
+                return;
+            }
+
+            auditLogs.forEach(log => {
+                let badgeColor = 'bg-slate-800 text-slate-300 border-slate-700';
+                if (log.type === 'success') badgeColor = 'bg-emerald-950 text-emerald-300 border-emerald-800/80';
+                if (log.type === 'error') badgeColor = 'bg-rose-950 text-rose-300 border-rose-800/80';
+                if (log.type === 'warning') badgeColor = 'bg-amber-950 text-amber-300 border-amber-800/80';
+                if (log.type === 'info') badgeColor = 'bg-indigo-950 text-indigo-300 border-indigo-800/80';
+
+                const item = document.createElement('div');
+                item.className = 'p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs flex items-start justify-between gap-3';
+                item.innerHTML = `
+                    <div class="space-y-0.5 flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-200">${log.workerName}</span>
+                            <span class="px-2 py-0.2 text-[10px] rounded-full border font-semibold ${badgeColor}">${log.action}</span>
+                        </div>
+                        <p class="text-slate-400 text-[11px] leading-relaxed">${log.details}</p>
+                    </div>
+                    <span class="text-[10px] text-slate-500 shrink-0 mt-0.5">${log.timestamp}</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function renderShiftLogs() {
+            const container = document.getElementById('shift-log-container');
+            container.innerHTML = '';
+
+            if (assignedShifts.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">No overtime shifts assigned yet.</div>`;
+                return;
+            }
+
+            assignedShifts.forEach(shift => {
+                const item = document.createElement('div');
+                item.className = 'p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs flex items-center justify-between';
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20">
+                            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-slate-200">${shift.workerName} <span class="font-normal text-slate-400">(${shift.workerPhone})</span></h4>
+                            <p class="text-[11px] text-indigo-300">${shift.shiftType} &bull; ${shift.date}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-bold text-emerald-400">+${shift.hours} hrs</span>
+                        <span class="block text-[10px] text-slate-500">${shift.timestamp}</span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+            lucide.createIcons();
+        }
+
+        function clearAuditLogs() {
+            if (confirm('Clear all audit logs and shift assignment history?')) {
+                auditLogs = [];
+                assignedShifts = [];
+                saveData();
+                renderAuditLogs();
+                renderShiftLogs();
+                showToast('Audit logs cleared.', 'info');
+            }
+        }
+
+        function updateStatsHeader() {
+            const activeWorkers = workers.filter(w => w.status === 'active').length;
+            document.getElementById('stat-active-workers').textContent = activeWorkers;
+            document.getElementById('stat-active-dispatches').textContent = activeCampaign.isRunning ? '1' : '0';
+        }
+
+        // --- TOAST NOTIFICATION UTILITY ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            let colors = 'bg-slate-800 text-slate-200 border-slate-700';
+            let icon = 'info';
+
+            if (type === 'success') {
+                colors = 'bg-emerald-950 text-emerald-200 border-emerald-800';
+                icon = 'check-circle';
+            } else if (type === 'warning') {
+                colors = 'bg-amber-950 text-amber-200 border-amber-800';
+                icon = 'alert-triangle';
+            } else if (type === 'error') {
+                colors = 'bg-rose-950 text-rose-200 border-rose-800';
+                icon = 'x-circle';
+            }
+
+            toast.className = `pointer-events-auto flex items-center space-x-2 px-4 py-3 rounded-xl border shadow-xl text-xs font-medium transition-all transform translate-y-2 opacity-0 ${colors}`;
+            toast.innerHTML = `
+                <i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i>
+                <span>${message}</span>
+            `;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            // Animate In
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            // Remove after 3.5s
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
